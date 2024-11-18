@@ -15,7 +15,7 @@ import {
 import { OwnerService } from './owner.service';
 import { CreateOwnerDto } from './dto/create-owner.dto';
 import { UpdateOwnerDto } from './dto/update-owner.dto';
-import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
+import { AmqpConnection, RabbitRPC } from '@golevelup/nestjs-rabbitmq';
 
 @Controller('owner')
 export class OwnerController {
@@ -24,22 +24,44 @@ export class OwnerController {
     private readonly amqpConnection: AmqpConnection,
   ) {}
 
+
+  public async getOwnerById(message: { ownerId: string }) {
+    try {
+      const owner = await this.ownerService.findById(message.ownerId);
+      if (!owner) {
+        throw new Error('Owner not found');
+      }
+      return owner;
+    } catch (error) {
+      throw new Error(error.message || 'Error retrieving owner');
+    }
+  }
+
+  public async getOwnerByUpdateId(message: { ownerId: string }) {
+    try {
+      const owner = await this.ownerService.findById(message.ownerId);
+      if (!owner) {
+        throw new Error('Owner not found');
+      }
+      return owner;
+    } catch (error) {
+      throw new Error(error.message || 'Error retrieving owner');
+    }
+  }
+
   @Post()
   async create(@Body() createOwnerDto: CreateOwnerDto) {
     try {
       const ownerExist = await this.ownerService.findOne({
         name: createOwnerDto.name,
       });
-      if (!ownerExist) {
+      if (ownerExist) {
         throw new HttpException(
           'Owner with this name already exist',
           HttpStatus.BAD_REQUEST,
         );
       }
       const owner = await this.ownerService.create(createOwnerDto);
-      this.amqpConnection.publish('ownerExchange', 'owner.updated', {
-        owner,
-      });
       return owner;
     } catch (error) {
       throw new HttpException(error.message, error.statusCode);
@@ -48,8 +70,8 @@ export class OwnerController {
 
   @Get()
   async findAll(
-    @Query('limit', ParseIntPipe) limit: number = 10,
-    @Query('page', ParseIntPipe) page: number = 1,
+    @Query('limit', ParseIntPipe) limit?: number,
+    @Query('page', ParseIntPipe) page?: number,
     @Query('email') email?: string,
     @Query('name') name?: string,
   ) {
@@ -57,6 +79,8 @@ export class OwnerController {
       const query = {};
       if (name) query['name'] = name;
       if (email) query['email'] = email;
+      limit = limit ?? 3;
+      page = page ?? 1;
       return this.ownerService.findAll(query, { page, limit });
     } catch (error) {
       throw new HttpException(error.message, error.statusCode)
@@ -102,10 +126,7 @@ export class OwnerController {
         throw new NotFoundException('Owner with the id not found');
       }
       const updatedOwner = await this.ownerService.update(id, updateOwnerDto);
-      this.amqpConnection.publish('ownerExchange', 'owner.updated', {
-        ownerId,
-        ...updateOwnerDto, // send updated owner data
-      });
+      this.amqpConnection.publish('ownerExchange', 'owner.updated', updatedOwner);
       return updatedOwner;
     } catch (error) {
       throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
