@@ -57,6 +57,8 @@ $ npm run test:e2e
 # test coverage
 $ npm run test:cov
 ```
+## Architecture and Design
+![image](https://github.com/user-attachments/assets/f1528366-ac4a-4648-8b47-76139e857b21)
 
 ## Resources
 
